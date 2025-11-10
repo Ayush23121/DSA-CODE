@@ -1,74 +1,91 @@
 #include <bits/stdc++.h>
 using namespace std;
 
-struct Instr {
-    string turn;
-    int dist;
+struct Slide {
+    int x1, y1, x2, y2;
 };
 
-pair<int,int> simulatePath(const vector<Instr>& instr, pair<int,int> start,
-                           int wrongIndex = -1, const string& newTurn = "") {
-    // Directions: 0 = North, 1 = East, 2 = South, 3 = West
-    int dir = 0;
-    int x = start.first, y = start.second;
-
-    for (int i = 0; i < (int)instr.size(); ++i) {
-        string t = instr[i].turn;
-        int d = instr[i].dist;
-        if (i == wrongIndex) t = newTurn;
-
-        if (t == "left") dir = (dir + 3) % 4;
-        else if (t == "right") dir = (dir + 1) % 4;
-        else if (t == "back") dir = (dir + 2) % 4;
-        // straight -> no change
-
-        if (dir == 0) y += d;       // north
-        else if (dir == 1) x += d;  // east
-        else if (dir == 2) y -= d;  // south
-        else if (dir == 3) x -= d;  // west
-    }
-    return {x, y};
+double getY(const Slide &s, double x) {
+    // get y-coordinate on line at given x
+    if (s.x1 == s.x2) return 1e9; // vertical shouldn't happen
+    double m = (double)(s.y2 - s.y1) / (s.x2 - s.x1);
+    double c = s.y1 - m * s.x1;
+    return m * x + c;
 }
 
 int main() {
-    ios::sync_with_stdio(false);
-    cin.tie(nullptr);
-
-    int N;
-    if (!(cin >> N)) return 0;
-
-    vector<Instr> instr;
-    instr.reserve(N);
-    for (int i = 0; i < N; ++i) {
-        string turn;
-        int dist;
-        cin >> turn >> dist;
-        instr.push_back({turn, dist});
+    int n;
+    cin >> n;
+    vector<Slide> slides(n);
+    for (int i = 0; i < n; i++) {
+        cin >> slides[i].x1 >> slides[i].y1 >> slides[i].x2 >> slides[i].y2;
     }
 
-    int sx, sy, tx, ty;
-    cin >> sx >> sy;
-    cin >> tx >> ty;
+    double x, y;
+    int energy;
+    cin >> x >> y >> energy;
 
-    pair<int,int> start = {sx, sy};
-    pair<int,int> target = {tx, ty};
+    while (energy > 0 && y > 0) {
+        // find slide just below current position
+        double bestY = -1;
+        int bestIdx = -1;
 
-    vector<string> allTurns = {"left", "right", "straight", "back"};
+        for (int i = 0; i < n; i++) {
+            int x1 = slides[i].x1, x2 = slides[i].x2;
+            int y1 = slides[i].y1, y2 = slides[i].y2;
+            if ((x >= min(x1, x2) - 1e-9) && (x <= max(x1, x2) + 1e-9)) {
+                double slideY = getY(slides[i], x);
+                if (slideY < y && slideY > bestY) {
+                    bestY = slideY;
+                    bestIdx = i;
+                }
+            }
+        }
 
-    for (int i = 0; i < N; ++i) {
-        for (const string &alt : allTurns) {
-            if (alt == instr[i].turn) continue; // must change to a different turn
+        if (bestIdx == -1) {
+            // fall to ground
+            y = 0;
+            break;
+        }
 
-            pair<int,int> finalPos = simulatePath(instr, start, i, alt);
-            if (finalPos == target) {
-                cout << "Yes\n";
-                cout << instr[i].turn << " " << instr[i].dist << "\n";
-                cout << alt << " " << instr[i].dist << "\n";
-                return 0;
+        // fall vertically to slide
+        y = bestY;
+
+        // slide along it
+        Slide s = slides[bestIdx];
+        double len = hypot(s.x2 - s.x1, s.y2 - s.y1);
+        if (energy < len) {
+            // partial slide
+            double ratio = energy / len;
+            x = s.x1 + (s.x2 - s.x1) * ratio;
+            y = s.y1 + (s.y2 - s.y1) * ratio;
+            energy = 0;
+            break;
+        } else {
+            x = s.x2;
+            y = s.y2;
+            energy -= (int)len;
+        }
+
+        // check stuck condition
+        if (energy > 0) {
+            bool below = false;
+            for (int i = 0; i < n; i++) {
+                if (i == bestIdx) continue;
+                int x1 = slides[i].x1, x2 = slides[i].x2;
+                if (x >= min(x1, x2) - 1e-9 && x <= max(x1, x2) + 1e-9) {
+                    double slideY = getY(slides[i], x);
+                    if (slideY < y) below = true;
+                }
+            }
+            if (!below && y > 0) {
+                int cost = (int)(x * y);
+                energy -= cost;
+                if (energy <= 0) break;
             }
         }
     }
 
-    cout << "No\n";
+    cout << (int)round(x) << " " << (int)round(y);
     return 0;
 }
